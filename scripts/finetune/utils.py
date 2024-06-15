@@ -3,13 +3,15 @@ import torch
 import argparse
 from datetime import datetime
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 os.environ["WANDB_API_KEY"] = "7b14a62f11dc360ce036cf59b53df0c12cd87f5a"
 torch.set_float32_matmul_precision('high')
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--model_type", type=str,
+                        default="control_point_e", help="model type")
     parser.add_argument("--dataset", type=str,
                         default="chair/armrests/v1", help="dataset name")
     parser.add_argument("--num_val_samples", type=int,
@@ -48,8 +50,8 @@ def parse_args():
     return args
 
 
-def build_name(args, script_name):
+def build_name(args, model_type):
     date_str = datetime.now().strftime("%m_%d_%Y_%H_%M_%S")
     dataset_str = args.dataset.replace("/", "_")
-    name = f"{date_str}_{dataset_str}_{script_name}"
+    name = f"{date_str}_{dataset_str}_{model_type}"
     return name
