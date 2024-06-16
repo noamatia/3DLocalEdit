@@ -28,12 +28,13 @@ class ShapeNet(Dataset):
         self.create_data(df)
         self.set_length(subset_size)
 
-    def append_sample(self, prompt, uid):
+    def append_sample(self, prompt, uid, sample_type):
         self.prompts.append(prompt)
         self.uids.append(uid)
         pc = self.create_pc(uid)
         pc_encoding = pc.encode().to(self.device)
         self.pc_encodings.append(pc_encoding)
+        self.sample_types.append(sample_type)
 
     def create_pc(self, uid):
         pc = PointCloud.load(f'{PCS_DIR}/{uid}.npz',
@@ -46,10 +47,11 @@ class ShapeNet(Dataset):
         self.uids = []
         self.prompts = []
         self.pc_encodings = []
+        self.sample_types = []
         for _, row in df.iterrows():
             for sample_type in SAMPLE_TYPES:
                 prompt, uid = row[f"{sample_type}_prompt"], row[f"{sample_type}_uid"]
-                self.append_sample(prompt, uid)
+                self.append_sample(prompt, uid, sample_type)
 
     def set_length(self, subset_size):
         if subset_size is None:

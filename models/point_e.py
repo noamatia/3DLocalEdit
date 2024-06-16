@@ -12,13 +12,6 @@ from point_e.models.configs import MODEL_CONFIGS, model_from_config
 from point_e.diffusion.configs import DIFFUSION_CONFIGS, diffusion_from_config
 
 
-def create_log_pc_image(pc, prompt, uid):
-    fig = plot_point_cloud(pc,
-                           theta=np.pi * 3 / 2)
-    caption = f"{uid.replace('/', '_')}_{prompt.replace(' ', '_')}"
-    return wandb.Image(fig, caption=caption)
-
-
 class PointE(pl.LightningModule):
     def __init__(
         self,
@@ -73,12 +66,17 @@ class PointE(pl.LightningModule):
                 val_items.append(item)
         return val_items
 
+    @staticmethod
+    def create_log_pc_image(pc, prompt):
+        fig = plot_point_cloud(pc,
+                               theta=np.pi * 3 / 2)
+        return wandb.Image(fig, caption=prompt)
+
     def init_wandb(self):
         images = []
         for item in self.val_items:
-            uid = item["uid"]
-            pc = self.dataset.create_pc(uid)
-            image = create_log_pc_image(pc, item["texts"], uid)
+            pc = self.dataset.create_pc(item["uid"])
+            image = self.create_log_pc_image(pc, item["texts"])
             images.append(image)
         wandb.log({"target": images})
 
@@ -107,13 +105,16 @@ class PointE(pl.LightningModule):
                     images = []
                     for item in self.val_items:
                         samples = None
-                        model_kwargs = {k: [v] for k, v in item.items()}
-                        for x in self.sampler.sample_batch_progressive(batch_size=1, model_kwargs=model_kwargs):
+                        kwargs = self.build_sample_kwargs(item)
+                        for x in self.sampler.sample_batch_progressive(batch_size=1, **kwargs):
                             samples = x
                         pcs = self.sampler.output_to_point_clouds(samples)
-                        image = create_log_pc_image(
-                            pcs[0], item["texts"], item["uid"])
+                        image = self.create_log_pc_image(pcs[0], item["texts"])
                         images.append(image)
                     log_data["output"] = images
             self.step_count += 1
             wandb.log(log_data)
+
+    def build_sample_kwargs(self, item):
+        kwargs = {"model_kwargs": {"texts": [item["texts"]]}}
+        return kwargs
