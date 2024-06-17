@@ -69,7 +69,9 @@ class ShapeNet(Dataset):
         return self.logical_length
 
     def __getitem__(self, index):
-        index = index % self.length
+        self.get_item(index % self.length)
+
+    def get_item(self, index):
         return {
             "uid": self.uids[index],
             "texts": self.prompts[index],

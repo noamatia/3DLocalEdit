@@ -3,7 +3,7 @@ import torch
 import argparse
 from datetime import datetime
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ["WANDB_API_KEY"] = "7b14a62f11dc360ce036cf59b53df0c12cd87f5a"
 torch.set_float32_matmul_precision('high')
 
@@ -11,7 +11,7 @@ torch.set_float32_matmul_precision('high')
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_type", type=str,
-                        default="control_point_e", help="model type")
+                        default="lora_control_point_e", help="model type")
     parser.add_argument("--dataset", type=str,
                         default="chair/armrests/v1", help="dataset name")
     parser.add_argument("--num_val_samples", type=int,
@@ -25,7 +25,7 @@ def parse_args():
     parser.add_argument("--grad_acc_steps", type=int,
                         default=11, help="gradient accumulation steps")
     parser.add_argument("--lr", type=float,
-                        default=7e-5*0.4, help="learning rate")
+                        default=0.0002, help="learning rate")
     parser.add_argument("--cond_drop_prob", type=float,
                         default=0.1, help="prompt dropout probability")
     parser.add_argument("--timesteps", type=int,

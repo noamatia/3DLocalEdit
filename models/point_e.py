@@ -36,6 +36,7 @@ class PointE(pl.LightningModule):
         self.num_val_samples = num_val_samples
         self.step_count = 0
         self.losses = []
+        self.log_data = {}
         model_name = "base40M-textvec"
         self.model = model_from_config(
             {**MODEL_CONFIGS[model_name], "cond_drop_prob": cond_drop_prob}, device)
@@ -59,11 +60,13 @@ class PointE(pl.LightningModule):
         )
 
     def build_val_items(self):
+        idx = 0
         val_items = []
-        for idx in range(self.num_val_samples):
+        while len(val_items) < self.num_val_samples and idx < len(self.dataset):
             item = self.dataset[idx]
             if item["uid"] not in [x["uid"] for x in val_items]:
                 val_items.append(item)
+            idx += 1
         return val_items
 
     @staticmethod
@@ -94,26 +97,34 @@ class PointE(pl.LightningModule):
     def configure_optimizers(self):
         return optim.Adam(self.parameters(), lr=self.lr)
 
-    def on_train_batch_end(self, outputs, batch, batch_idx):
+    def init_log_data(self):
         train_loss = sum(self.losses) / len(self.losses)
         self.losses = []
         self.log("train_loss", train_loss)
+        self.log_data = {"train_loss": train_loss}
+
+    def on_train_batch_end(self, outputs, batch, batch_idx):
+        self.init_log_data()
         if self.use_wandb:
-            log_data = {"train_loss": train_loss}
             if self.step_count % self.val_freq == 0:
                 with torch.no_grad():
                     images = []
                     for item in self.val_items:
-                        samples = None
-                        kwargs = self.build_sample_kwargs(item)
-                        for x in self.sampler.sample_batch_progressive(batch_size=1, **kwargs):
-                            samples = x
+                        samples = self.sample(item)
                         pcs = self.sampler.output_to_point_clouds(samples)
                         image = self.create_log_pc_image(pcs[0], item["texts"])
                         images.append(image)
-                    log_data["output"] = images
+                    self.log_data["output"] = images
             self.step_count += 1
-            wandb.log(log_data)
+            wandb.log(self.log_data)
+        self.log_data = {}
+
+    def sample(self, item):
+        samples = None
+        kwargs = self.build_sample_kwargs(item)
+        for x in self.sampler.sample_batch_progressive(batch_size=1, **kwargs):
+            samples = x
+        return samples
 
     def build_sample_kwargs(self, item):
         kwargs = {"model_kwargs": {"texts": [item["texts"]]}}
