@@ -11,8 +11,8 @@ def plot_point_cloud(
     color: bool = True,
     grid_size: int = 1,
     fixed_bounds: Optional[Tuple[Tuple[float, float, float], Tuple[float, float, float]]] = (
-        (-0.5, -0.5, -0.5),
-        (0.5, 0.5, 0.5),
+        (-0.75, -0.75, -0.75),
+        (0.75, 0.75, 0.75),
     ),
     theta: float = None,
 ):
@@ -28,7 +28,8 @@ def plot_point_cloud(
 
     for i in range(grid_size):
         for j in range(grid_size):
-            ax = fig.add_subplot(grid_size, grid_size, 1 + j + i * grid_size, projection="3d")
+            ax = fig.add_subplot(grid_size, grid_size, 1 +
+                                 j + i * grid_size, projection="3d")
             color_args = {}
             if color:
                 color_args["c"] = np.stack(

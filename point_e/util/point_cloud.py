@@ -28,6 +28,7 @@ class PointCloud:
 
     coords: np.ndarray
     channels: Dict[str, np.ndarray]
+    mask: Optional[np.ndarray] = None
 
     @classmethod
     def load(cls, f: Union[str, BinaryIO], coords_key="coords", add_black_color=False, axes=None) -> "PointCloud":
@@ -44,13 +45,35 @@ class PointCloud:
             if axes is not None:
                 coords[:, [0, 1, 2]] = coords[:, axes]
             if add_black_color:
-                channels = {k: np.zeros_like(coords[:, 0], dtype=np.float32) for k in ["R", "G", "B"]}
+                channels = {k: np.zeros_like(coords[:, 0], dtype=np.float32) for k in [
+                    "R", "G", "B"]}
             else:
-                channels={k: obj[k].astype(np.float32) for k in keys if k != coords_key}
+                channels = {k: obj[k].astype(np.float32)
+                            for k in keys if k != coords_key}
             return PointCloud(
                 coords=coords,
                 channels=channels,
             )
+
+    @classmethod
+    def load_partnet(cls, path: str, labels_path: str, masked_labels: list, axes=None, paint_labels=False) -> "PointCloud":
+        """
+        Load the partnet point cloud from a .txt file. 
+        """
+        coords = np.loadtxt(path, dtype=np.float32)
+        labels = np.loadtxt(labels_path, dtype=int)
+        if axes is not None:
+            coords[:, [0, 1, 2]] = coords[:, axes]
+        channels = {k: np.zeros_like(coords[:, 0], dtype=np.float32) for k in [
+            "R", "G", "B"]}
+        mask = np.isin(labels, masked_labels)
+        if paint_labels:
+            channels["R"][mask] = 1
+        return PointCloud(
+            coords=coords,
+            channels=channels,
+            mask=1 - mask.astype(int)
+        )
 
     def save(self, f: Union[str, BinaryIO]):
         """
@@ -84,7 +107,8 @@ class PointCloud:
         """
         if len(self.coords) <= num_points:
             return self
-        indices = np.random.choice(len(self.coords), size=(num_points,), replace=False)
+        indices = np.random.choice(
+            len(self.coords), size=(num_points,), replace=False)
         return self.subsample(indices, **subsample_kwargs)
 
     def farthest_point_sample(
@@ -109,7 +133,8 @@ class PointCloud:
         """
         if len(self.coords) <= num_points:
             return self
-        init_idx = random.randrange(len(self.coords)) if init_idx is None else init_idx
+        init_idx = random.randrange(
+            len(self.coords)) if init_idx is None else init_idx
         indices = np.zeros([num_points], dtype=np.int64)
         indices[0] = init_idx
         sq_norms = np.sum(self.coords**2, axis=-1)
@@ -130,10 +155,12 @@ class PointCloud:
             return PointCloud(
                 coords=self.coords[indices],
                 channels={k: v[indices] for k, v in self.channels.items()},
+                mask=self.mask[indices] if self.mask is not None else None,
             )
 
         new_coords = self.coords[indices]
-        neighbor_indices = PointCloud(coords=new_coords, channels={}).nearest_points(self.coords)
+        neighbor_indices = PointCloud(
+            coords=new_coords, channels={}).nearest_points(self.coords)
 
         # Make sure every point points to itself, which might not
         # be the case if points are duplicated or there is rounding
@@ -150,7 +177,8 @@ class PointCloud:
         return PointCloud(coords=new_coords, channels=new_channels)
 
     def select_channels(self, channel_names: List[str]) -> np.ndarray:
-        data = np.stack([preprocess(self.channels[name], name) for name in channel_names], axis=-1)
+        data = np.stack([preprocess(self.channels[name], name)
+                        for name in channel_names], axis=-1)
         return data
 
     def nearest_points(self, points: np.ndarray, batch_size: int = 16384) -> np.ndarray:
@@ -167,8 +195,9 @@ class PointCloud:
         norms = np.sum(self.coords**2, axis=-1)
         all_indices = []
         for i in range(0, len(points), batch_size):
-            batch = points[i : i + batch_size]
-            dists = norms + np.sum(batch**2, axis=-1)[:, None] - 2 * (batch @ self.coords.T)
+            batch = points[i: i + batch_size]
+            dists = norms + np.sum(batch**2, axis=-
+                                   1)[:, None] - 2 * (batch @ self.coords.T)
             all_indices.append(np.argmin(dists, axis=-1))
         return np.concatenate(all_indices, axis=0)
 
@@ -197,3 +226,13 @@ class PointCloud:
             return pos_tensor
         aux_tensor = torch.stack(aux_list, dim=0)
         return torch.cat([pos_tensor, aux_tensor], dim=0)
+
+    def encode_mask(self) -> torch.Tensor:
+        """
+        Encode the mask to a tensor.
+        """
+        num_aux = 0
+        for name in self.channels:
+            if name in {"R", "G", "B", "A"}:
+                num_aux += 1
+        return torch.tensor(np.tile(self.mask, (num_aux + 3, 1)), dtype=torch.float32)

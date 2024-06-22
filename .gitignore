@@ -6,3 +6,4 @@ point_e_model_cache/
 wandb/
 lightning_logs/
 outputs/
+datasets/partnet

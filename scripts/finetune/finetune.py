@@ -1,70 +1,36 @@
 import wandb
 import pytorch_lightning as pl
-from models.point_e import PointE
-from datasets.shapenet import ShapeNet
 from torch.utils.data import DataLoader
-from models.control_point_e import ControlPointE
-from datasets.control_shapenet import ControlShapeNet
-from models.lora_control_point_e import LoraControlPointE
-from datasets.lora_control_shapenet import LoraControlShapeNet
 
-from scripts.finetune.utils import *
+from scripts.finetune.finetune_utils import *
 
 
 def main(args, name, model_type, dataset_type):
     if args.use_wandb:
-        wandb.init(project=args.wandb_project,
-                   name=name, config=vars(args))
+        wandb.init(project=args.wandb_project, name=name, config=vars(args))
+    output_dir = os.path.join(OUTPUTS_DIR, name)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    dataset = dataset_type(data_dir=args.dataset,
-                           batch_size=args.batch_size,
-                           device=device,
-                           num_points=args.num_points,
-                           subset_size=args.subset_size)
-    data_loader = DataLoader(dataset=dataset,
-                             batch_size=args.batch_size,
-                             shuffle=True)
-    model_kwargs = dict(lr=args.lr,
-                        device=device,
-                        dataset=dataset,
-                        val_freq=args.val_freq,
-                        use_wandb=args.use_wandb,
-                        timesteps=args.timesteps,
-                        batch_size=args.batch_size,
-                        num_val_samples=args.num_val_samples,
-                        cond_drop_prob=args.cond_drop_prob)
-    if args.model_type == "lora_control_point_e":
-        model_kwargs["rank"] = args.rank
-        model_kwargs["alpha"] = args.alpha
-        model_kwargs["negative_scale"] = args.negative_scale
-        model_kwargs["positive_scale"] = args.positive_scale
+    dataset_kwargs = buid_dataset_kwargs(device, args, args.data_csv)
+    dataset = dataset_type(**dataset_kwargs)
+    data_loader = DataLoader(dataset=dataset, batch_size=args.batch_size, shuffle=True)
+    if args.data_csv_val is not None:
+        dataset_val_kwargs = buid_dataset_kwargs(device, args, args.data_csv_val)
+        dataset_val = dataset_type(**dataset_val_kwargs)
+    else:
+        dataset_val = dataset.copy()
+    model_kwargs = buid_model_kwargs(device, args, dataset_val, output_dir)
     model = model_type(**model_kwargs)
-    trainer = pl.Trainer(accumulate_grad_batches=args.grad_acc_steps,
-                         max_epochs=args.epochs)
+    trainer = pl.Trainer(
+        accumulate_grad_batches=args.grad_acc_steps, max_epochs=args.epochs
+    )
     trainer.fit(model, data_loader)
     if args.use_wandb:
-        output_dir = f"/home/noamatia/repos/point-e/outputs/{name}"
-        os.makedirs(output_dir, exist_ok=True)
-        if args.model_type == "lora_control_point_e":
-            model.network.save_weights(f"{output_dir}/model_final.pt")
-        else:
-            torch.save(model.model.state_dict(),
-                       f"{output_dir}/model_final.pt")
+        model.save_weights(MODEL_FINAL_PT)
         wandb.finish()
 
 
 if __name__ == "__main__":
     args = parse_args()
-    if args.model_type == "lora_control_point_e":
-        model_type = LoraControlPointE
-        dataset_type = LoraControlShapeNet
-    elif args.model_type == "control_point_e":
-        model_type = ControlPointE
-        dataset_type = ControlShapeNet
-    elif args.model_type == "point_e":
-        model_type = PointE
-        dataset_type = ShapeNet
-    else:
-        raise ValueError(f"Unknown model type: {args.model_type}")
+    model_type, dataset_type = MODEL_TYPE_DICT[args.model_type]
     name = build_name(args, args.model_type)
     main(args, name, model_type, dataset_type)
