@@ -168,9 +168,21 @@ class ShapeNet(Dataset):
         }
         return item
 
+    def eval_index(self, logical_index):
+        """
+        Get the index of the item in the dataset for evaluation.
+
+        Args:
+            logical_index (int): The logical index of the item to retrieve.
+
+        Returns:
+            int: The index of the item in the dataset for evaluation.
+        """
+        return logical_index % self.length
+
     def __len__(self):
         return self.logical_length
 
-    def __getitem__(self, index):
-        logical_index = index % self.length
-        self.get_item(logical_index)
+    def __getitem__(self, logical_index):
+        index = self.eval_index(logical_index)
+        self.get_item(index)

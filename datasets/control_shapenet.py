@@ -88,9 +88,9 @@ class ControlShapeNet(ShapeNet):
         item[GUIDANCE_UID] = self.guidance_uids[index]
         return item
 
-    def __getitem__(self, index):    
-        logical_index = index % self.length
+    def __getitem__(self, logical_index):
+        index = self.eval_index(logical_index)
         if self.paired:
-            return self.get_item_paired(logical_index)
+            return self.get_item_paired(index)
         else:
-            return self.get_item_shapetalk(logical_index)
+            return self.get_item_shapetalk(index)

@@ -8,8 +8,8 @@ from scripts.finetune.finetune_utils import *
 def main(args, name, model_type, dataset_type):
     if args.use_wandb:
         wandb.init(project=args.wandb_project, name=name, config=vars(args))
-    output_dir = os.path.join(OUTPUTS_DIR, name)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    output_dir = os.path.join(MODELS_WEIGHTS_DIR, name)
+    device = torch.device(CUDA if torch.cuda.is_available() else CPU)
     dataset_kwargs = buid_dataset_kwargs(device, args, args.data_csv)
     dataset = dataset_type(**dataset_kwargs)
     data_loader = DataLoader(dataset=dataset, batch_size=args.batch_size, shuffle=True)
@@ -17,7 +17,7 @@ def main(args, name, model_type, dataset_type):
         dataset_val_kwargs = buid_dataset_kwargs(device, args, args.data_csv_val)
         dataset_val = dataset_type(**dataset_val_kwargs)
     else:
-        dataset_val = dataset.copy()
+        dataset_val = dataset
     model_kwargs = buid_model_kwargs(device, args, dataset_val, output_dir)
     model = model_type(**model_kwargs)
     trainer = pl.Trainer(

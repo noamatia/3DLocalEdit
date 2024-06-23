@@ -8,20 +8,6 @@ from point_e.diffusion.configs import DIFFUSION_CONFIGS, diffusion_from_config
 
 from consts import *
 
-LOSS = "loss"
-TARGET = "target"
-SOURCE = "source"
-OUTPUT = "output"
-GUIDANCES = "guidances"
-TIMESTEPS = "timesteps"
-TRAIN_LOSS = "train_loss"
-MODEL_KWARGS = "model_kwargs"
-MODEL_NAME = "base40M-textvec"
-MASK_ENCODING = "mask_encoding"
-MASKED_SOURCE = "masked_source"
-MASKED_TARGET = "masked_target"
-COND_DROP_PROB = "cond_drop_prob"
-
 
 def build_model(cond_drop_prob, device):
     model = model_from_config(

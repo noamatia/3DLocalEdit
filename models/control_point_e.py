@@ -6,11 +6,18 @@ class ControlPointE(PointE):
     ControlPointE class represents a PointE model with control using cross entity attention.
 
     It inherits from the PointE class and adds additional functionality specific to controled generation.
+
+    Attributes:
+        model_weights (str): The model weights.
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, model_weights, **kwargs):
         super().__init__(**kwargs)
         self.model.create_control_layers()
+        if model_weights is not None:
+            self.model.load_state_dict(
+                torch.load(os.path.join(MODELS_WEIGHTS_DIR, model_weights))
+            )
 
     def init_wandb(self):
         """

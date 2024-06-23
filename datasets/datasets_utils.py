@@ -1,15 +1,8 @@
 import os
 from point_e.util.point_cloud import PointCloud
 
-from consts import *
 
-NEGATIVE = "negative"
-POSITIVE = "positive"
-UTTERANCE = "utterance"
-TARGET_UID = "target_uid"
-SOURCE_UID = "source_uid"
-SAMPLE_TYPES = [NEGATIVE, POSITIVE]
-PCS_DIR = "/scratch/noam/shapetalk/point_clouds/scaled_to_align_rendering"
+from consts import *
 
 
 def load_pc(uid):
