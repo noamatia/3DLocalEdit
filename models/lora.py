@@ -41,7 +41,7 @@ class LoRALinearModule(torch.nn.Module):
 class LoRANetwork(torch.nn.Module):
     def __init__(
         self,
-        diffusion: PointDiffusionTransformer,
+        model: PointDiffusionTransformer,
         rank: int = 4,
         alpha: float = 1.0,
     ):
@@ -49,10 +49,22 @@ class LoRANetwork(torch.nn.Module):
         self.lora_scale = 1
         self.alpha = alpha
         self.lora_dim = rank
-        self.lora_modules = self.create_modules(diffusion)
-        print(
-            f"create LoRA for PointDiffusionTransformer: {len(self.lora_modules)} modules."
-        )
+        self.lora_modules = self.create_modules(model)
+        print(f"PointDiffusionTransformer LoRA: {len(self.lora_modules)} modules.")
+        self.apply_lora_modules()
+        del model
+        torch.cuda.empty_cache()
+
+    def create_modules(self, model: PointDiffusionTransformer) -> list:
+        loras = []
+        for name, module in model.named_modules():
+            if model.is_trainable_param(name) and module.__class__.__name__ == LINEAR:
+                lora_name = name.replace(".", "_")
+                lora = LoRALinearModule(lora_name, module, self.lora_dim, self.alpha)
+                loras.append(lora)
+        return loras
+
+    def apply_lora_modules(self):
         lora_names = set()
         for lora in self.lora_modules:
             assert (
@@ -61,22 +73,6 @@ class LoRANetwork(torch.nn.Module):
             lora_names.add(lora.lora_name)
             lora.apply_to()
             self.add_module(lora.lora_name, lora)
-        del diffusion
-        torch.cuda.empty_cache()
-
-    def create_modules(self, root_module: torch.nn.Module) -> list:
-        loras = []
-        for name, module in root_module.named_modules():
-            if module.__class__.__name__ in LORA_TARGET_MODULES_REPLACE:
-                for i, (child_name, child_module) in enumerate(module.named_modules()):
-                    if child_module.__class__.__name__ == LINEAR:
-                        lora_name = LORA + "." + name + "." + str(i) + "." + child_name
-                        lora_name = lora_name.replace(".", "_")
-                        lora = LoRALinearModule(
-                            lora_name, child_module, self.lora_dim, self.alpha
-                        )
-                        loras.append(lora)
-        return loras
 
     def prepare_optimizer_params(self):
         all_params = []
@@ -111,10 +107,7 @@ class LoRANetwork(torch.nn.Module):
             lora.multiplier = 1
 
     def print_parameters_status(self):
-        for name, module in list(self.named_modules()):
-            if len(list(module.parameters())) > 0:
-                print(f"Module: {name}")
-                for name, param in list(module.named_parameters()):
-                    print(
-                        f"    Parameter: {name}, Requires Grad: {param.requires_grad}"
-                    )
+        for name, param in self.named_parameters():
+            print(
+                f"name: {name}, shape: {param.shape}, req grad: {param.requires_grad}"
+            )
