@@ -1,8 +1,4 @@
-import os
-from point_e.util.point_cloud import PointCloud
-
-
-from consts import *
+from utils import *
 
 
 def load_pc(uid):

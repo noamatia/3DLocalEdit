@@ -1,4 +1,3 @@
-import os
 import torch
 import argparse
 import pandas as pd
@@ -12,7 +11,7 @@ from datasets.lora_control_shapenet import LoraControlShapeNet
 from models.masked_lora_control_point_e import MaskedLoraControlPointE
 from datasets.masked_lora_control_shapenet import MaskedLoraControlShapeNet
 
-from consts import *
+from utils import *
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ["WANDB_API_KEY"] = "7b14a62f11dc360ce036cf59b53df0c12cd87f5a"

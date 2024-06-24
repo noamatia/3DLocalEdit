@@ -6,7 +6,7 @@ from point_e.diffusion.sampler import PointCloudSampler
 from point_e.models.configs import MODEL_CONFIGS, model_from_config
 from point_e.diffusion.configs import DIFFUSION_CONFIGS, diffusion_from_config
 
-from consts import *
+from utils import *
 
 
 def build_model(cond_drop_prob, device):
