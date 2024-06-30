@@ -38,6 +38,7 @@ class PointCloudSampler:
         sigma_min: Sequence[float] = (1e-3, 1e-3),
         sigma_max: Sequence[float] = (120, 160),
         s_churn: Sequence[float] = (3, 0),
+        experimental_t: int = None
     ):
         n = len(models)
         assert n > 0
@@ -86,6 +87,7 @@ class PointCloudSampler:
         self.sigma_min = sigma_min
         self.sigma_max = sigma_max
         self.s_churn = s_churn
+        self.experimental_t = experimental_t
 
         self.models = models
         self.diffusions = diffusions
@@ -166,6 +168,7 @@ class PointCloudSampler:
                     sigma_max=stage_sigma_max,
                     s_churn=stage_s_churn,
                     guidance_scale=stage_guidance_scale,
+                    experimental_sampler = self if self.experimental_t is not None else None
                 )
             else:
                 internal_batch_size = batch_size

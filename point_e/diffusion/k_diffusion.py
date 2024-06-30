@@ -22,7 +22,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from matplotlib import pyplot as plt
 import numpy as np
+from point_e.util.plotting import plot_point_cloud
 import torch as th
 
 from .gaussian_diffusion import GaussianDiffusion, mean_flat
@@ -133,9 +135,16 @@ def karras_sample_progressive(
     s_tmax=float("inf"),
     s_noise=1.0,
     guidance_scale=0.0,
+    experimental_sampler=None,
 ):
     sigmas = get_sigmas_karras(steps, sigma_min, sigma_max, rho, device=device)
     x_T = th.randn(*shape, device=device) * sigma_max
+    if experimental_sampler is not None:
+        assert sampler == "heun"
+        assert shape[0] == 2
+        shape = (1, shape[1], shape[2])
+        x_T = th.randn(*shape, device=device) * sigma_max
+        x_T = th.cat([x_T, x_T], dim=0)
     sample_fn = {"heun": sample_heun, "dpm": sample_dpm, "ancestral": sample_euler_ancestral}[
         sampler
     ]
@@ -156,9 +165,9 @@ def karras_sample_progressive(
     elif isinstance(diffusion, GaussianDiffusion):
         model = GaussianToKarrasDenoiser(model, diffusion)
 
-        def denoiser(x_t, sigma):
+        def denoiser(x_t, sigma, experimental_step=False):
             _, denoised = model.denoise(
-                x_t, sigma, clip_denoised=clip_denoised, model_kwargs=model_kwargs
+                x_t, sigma, clip_denoised=clip_denoised, model_kwargs={**model_kwargs, "experimental_step": experimental_step}
             )
             return denoised
 
@@ -167,10 +176,10 @@ def karras_sample_progressive(
 
     if guidance_scale != 0 and guidance_scale != 1:
 
-        def guided_denoiser(x_t, sigma):
+        def guided_denoiser(x_t, sigma, experimental_step=False):
             x_t = th.cat([x_t, x_t], dim=0)
             sigma = th.cat([sigma, sigma], dim=0)
-            x_0 = denoiser(x_t, sigma)
+            x_0 = denoiser(x_t, sigma, experimental_step=experimental_step)
             cond_x_0, uncond_x_0 = th.split(x_0, len(x_0) // 2, dim=0)
             x_0 = uncond_x_0 + guidance_scale * (cond_x_0 - uncond_x_0)
             return x_0
@@ -183,6 +192,8 @@ def karras_sample_progressive(
         x_T,
         sigmas,
         progress=progress,
+        experimental_sampler=experimental_sampler,
+        diffusion=diffusion,
         **sampler_args,
     ):
         if isinstance(diffusion, GaussianDiffusion):
@@ -241,6 +252,8 @@ def sample_heun(
     x,
     sigmas,
     progress=False,
+    experimental_sampler=None,
+    diffusion=None,
     s_churn=0.0,
     s_tmin=0.0,
     s_tmax=float("inf"),
@@ -254,15 +267,25 @@ def sample_heun(
 
         indices = tqdm(indices)
 
+    prev_pc = None
     for i in indices:
         gamma = (
             min(s_churn / (len(sigmas) - 1), 2**0.5 - 1) if s_tmin <= sigmas[i] <= s_tmax else 0.0
         )
-        eps = th.randn_like(x) * s_noise
+        if experimental_sampler is None:
+            eps = th.randn_like(x) * s_noise
+            experimental_step = False
+            experimental_t = None
+        else:
+            assert x.shape[0] == 2
+            eps = th.randn((1, x.shape[1], x.shape[2])) * s_noise
+            eps = th.cat([eps, eps], dim=0).to(x.device)
+            experimental_t = experimental_sampler.experimental_t
+            experimental_step = i < experimental_t
         sigma_hat = sigmas[i] * (gamma + 1)
         if gamma > 0:
             x = x + eps * (sigma_hat**2 - sigmas[i] ** 2) ** 0.5
-        denoised = denoiser(x, sigma_hat * s_in)
+        denoised = denoiser(x, sigma_hat * s_in, experimental_step=experimental_step)
         d = to_d(x, sigma_hat, denoised)
         yield {"x": x, "i": i, "sigma": sigmas[i], "sigma_hat": sigma_hat, "pred_xstart": denoised}
         dt = sigmas[i + 1] - sigma_hat
@@ -272,10 +295,21 @@ def sample_heun(
         else:
             # Heun's method
             x_2 = x + d * dt
-            denoised_2 = denoiser(x_2, sigmas[i + 1] * s_in)
+            denoised_2 = denoiser(x_2, sigmas[i + 1] * s_in, experimental_step=experimental_step)
             d_2 = to_d(x_2, sigmas[i + 1], denoised_2)
             d_prime = (d + d_2) / 2
             x = x + d_prime * dt
+        if experimental_t is not None:
+            if experimental_t == i + 1:
+                samples = diffusion.unscale_channels(x)
+                prev_pc = experimental_sampler.output_to_point_clouds(samples)[1]
+            elif experimental_t == i and prev_pc is not None:
+                samples = diffusion.unscale_channels(x)
+                cur_pc = experimental_sampler.output_to_point_clouds(samples)[1]
+                cur_pc.set_color_by_dist(prev_pc)
+                fig = plot_point_cloud(cur_pc)
+                fig.savefig(f"experimental_sampler/{i}.png")
+                plt.close()
     yield {"x": x, "pred_xstart": denoised}
 
 
