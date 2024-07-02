@@ -7,4 +7,5 @@ wandb/
 lightning_logs/
 outputs/
 datasets/partnet
+datasets/data
 point_e/examples/experiment1

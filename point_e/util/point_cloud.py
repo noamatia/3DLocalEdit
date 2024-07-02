@@ -252,3 +252,15 @@ class PointCloud:
         self.channels["R"] = rgb_values[:, 0]
         self.channels["G"] = rgb_values[:, 1]
         self.channels["B"] = rgb_values[:, 2]
+
+    def rescale(self, other: "PointCloud"):
+        pc1 = self.coords.T
+        pc2 = other.coords.T
+        min_pc1 = np.min(pc1, axis=1, keepdims=True)
+        max_pc1 = np.max(pc1, axis=1, keepdims=True)
+        min_pc2 = np.min(pc2, axis=1, keepdims=True)
+        max_pc2 = np.max(pc2, axis=1, keepdims=True)
+        scale_factor = (max_pc2 - min_pc2) / (max_pc1 - min_pc1)
+        pc1_scaled = (pc1 - min_pc1) * scale_factor + min_pc2
+        self.coords = pc1_scaled.T
+        
