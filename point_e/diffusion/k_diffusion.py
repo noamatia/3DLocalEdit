@@ -22,6 +22,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import os
+import imageio
 from matplotlib import pyplot as plt
 import numpy as np
 from point_e.util.plotting import plot_point_cloud
@@ -266,22 +268,21 @@ def sample_heun(
         from tqdm.auto import tqdm
 
         indices = tqdm(indices)
-
-    prev_pc = None
+    j_to_file = {0: [], 1: []}
+    experimental = experimental_sampler is not None
+    experimental_step = False
+    experimental_t = experimental_sampler.experimental_t if experimental else None
     for i in indices:
         gamma = (
             min(s_churn / (len(sigmas) - 1), 2**0.5 - 1) if s_tmin <= sigmas[i] <= s_tmax else 0.0
         )
-        if experimental_sampler is None:
-            eps = th.randn_like(x) * s_noise
-            experimental_step = False
-            experimental_t = None
-        else:
+        if experimental:
             assert x.shape[0] == 2
             eps = th.randn((1, x.shape[1], x.shape[2])) * s_noise
             eps = th.cat([eps, eps], dim=0).to(x.device)
-            experimental_t = experimental_sampler.experimental_t
             experimental_step = i < experimental_t
+        else:
+            eps = th.randn_like(x) * s_noise
         sigma_hat = sigmas[i] * (gamma + 1)
         if gamma > 0:
             x = x + eps * (sigma_hat**2 - sigmas[i] ** 2) ** 0.5
@@ -299,17 +300,24 @@ def sample_heun(
             d_2 = to_d(x_2, sigmas[i + 1], denoised_2)
             d_prime = (d + d_2) / 2
             x = x + d_prime * dt
-        if experimental_t is not None:
-            if experimental_t == i + 1:
-                samples = diffusion.unscale_channels(x)
-                prev_pc = experimental_sampler.output_to_point_clouds(samples)[1]
-            elif experimental_t == i and prev_pc is not None:
-                samples = diffusion.unscale_channels(x)
-                cur_pc = experimental_sampler.output_to_point_clouds(samples)[1]
-                cur_pc.set_color_by_dist(prev_pc)
-                fig = plot_point_cloud(cur_pc)
-                fig.savefig(f"experimental_sampler/{i}.png")
+        if experimental and not experimental_step:
+            samples = diffusion.unscale_channels(x)
+            pcs = experimental_sampler.output_to_point_clouds(samples)
+            for j in range(2):
+                pcs[j].set_color_by_dist(pcs[1 - j])
+                fig = plot_point_cloud(pcs[j])
+                name = f"experimental_sampler/{j}_{i}.png"
+                fig.savefig(name)
+                j_to_file[j].append(name)
                 plt.close()
+    if experimental:
+        for j in range(2):
+            images = []
+            for file in j_to_file[j]:
+                images.append(imageio.imread(file))
+                os.remove(file)
+            if images:
+                imageio.mimsave(f"experimental_sampler/{experimental_t}_movie_{j}.gif", images, duration=1.0)
     yield {"x": x, "pred_xstart": denoised}
 
 
